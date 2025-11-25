@@ -42,9 +42,9 @@ body {
 }
 
 /* ========================================= */
-/* 🔥 OPRAVA 1: GRAF (Popisky vonku)         */
+/* 🔥 OPRAVA GRAFU: POVOLENIE PRETEKANIA     */
 /* ========================================= */
-/* Iba pre graf povoľujeme pretekanie von */
+/* Toto zabezpečí, že labels (Alkohol, Nájom) môžu ísť "mimo" rámček grafu a neodrežú sa */
 .highcharts-container, 
 .highcharts-data-label, 
 .highcharts-label,
@@ -52,10 +52,14 @@ body {
     overflow: visible !important;
 }
 
+/* KĽÚČOVÁ OPRAVA: Hlavný kontajner grafu nesmie mať hidden, inak odreže labels */
+#pie-chart-section {
+    overflow: visible !important; 
+}
+
 /* ========================================= */
-/* 🔥 OPRAVA 2: TABUĽKA (Posúvanie prstom)   */
+/* 🔥 OPRAVA TABUĽKY: SCROLLOVANIE           */
 /* ========================================= */
-/* Vrátenie scrollovania pre tabuľku */
 .table-container {
     overflow-x: auto !important; /* Povolí horizontálny posun */
     -webkit-overflow-scrolling: touch; /* Plynulé posúvanie na iPhone */
@@ -63,15 +67,14 @@ body {
     display: block;
 }
 
-/* Zabezpečí, aby sa bunky nezalamovali, čo vynúti scrollovanie ak je text dlhý */
 .expenses-table td, 
 .expenses-table th {
-    white-space: nowrap;
+    white-space: nowrap; /* Vynúti jeden riadok -> spustí scroll */
 }
 
 /* ========================================= */
 
-/* 6️⃣ Poistka pre minimálnu výšku grafu na obrazovke */
+/* Poistka pre minimálnu výšku grafu na obrazovke */
 #myChart {
     min-height: 500px !important;
 }
@@ -127,7 +130,8 @@ body {
 <body class="bg-gray-100 flex min-h-screen p-4">
 
 <!-- Hlavný obsah aplikácie -->
-<div id="main-content" class="container mx-auto bg-white shadow-xl rounded-2xl p-8 space-y-8 max-w-4xl">
+<!-- 🔥 ODSTRÁNENÉ "overflow-hidden" z tried nižšie, to spôsobovalo orezanie grafu! -->
+<div id="main-content" class="container mx-auto bg-white shadow-xl rounded-2xl p-8 space-y-8 max-w-4xl" style="overflow: visible !important;">
 
 <header class="text-center">
 <h1 class="text-4xl font-bold text-blue-900 mb-2">Sledovanie výdavkov</h1>
@@ -234,7 +238,7 @@ Pridať
 <!-- Chart and table section -->
 <section class="flex flex-col lg:flex-row gap-8">
 <!-- Pie chart -->
-<div id="pie-chart-section" class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
+<div id="pie-chart-section" class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center" style="overflow: visible !important;">
     <!-- Kontajner pre graf -->
     <div id="myChart" style="width: 100%;"></div>
     
@@ -245,7 +249,7 @@ Pridať
 </div>
 
 <!-- Expense table -->
-<div class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+<div class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
 <h2 class="text-2xl font-bold text-gray-800 mb-4">Prehľad výdavkov</h2>
 <!-- 🔥 TABLE CONTAINER: overflow-x-auto umožní swipovanie do strany -->
 <div class="table-container">
