@@ -58,27 +58,42 @@ body {
 }
 
 /* ========================================= */
-/* 🔥 OPRAVA LEGENDY (User Solution)         */
+/* 🔥 OPRAVA LEGENDY (Váš CSS Fix)           */
 /* ========================================= */
+
 .legend-container {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     align-items: flex-start;
 }
+
+/* Vložené vaše riešenie pre .legend */
+.legend {
+    flex-shrink: 0 !important;
+    min-width: 160px !important; /* zabezpečí minimálnu šírku */
+    overflow: visible !important;
+}
+
+/* Upravené vaše riešenie pre .legend-item */
 .legend-item {
     border: 1px solid #e5e7eb;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 11px;
-    white-space: nowrap;      /* názvy sa nebudú lámať */
+    
+    /* 🔥 KĽÚČOVÉ OPRAVY OREZÁVANIA */
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    
     max-width: none !important;
-    /* Pridané pre pekné zobrazenie */
     display: flex;
     align-items: center;
     background-color: #f9fafb;
     justify-content: space-between;
 }
+
 .legend-color {
     flex-shrink: 0;
     margin-right: 8px; /* Odsadenie farby od textu */
@@ -272,8 +287,8 @@ Pridať
     <div id="myChart" style="width: 100%;"></div>
     
     <!-- Vlastná legenda pod grafom -->
-    <!-- 🔥 POUŽITIE NOVEJ TRIEDY PRE LEGENDU -->
-    <div id="custom-legend-container" class="legend-container w-full mt-6">
+    <!-- 🔥 PRIDANÁ TRIEDA .legend do HTML -->
+    <div id="custom-legend-container" class="legend-container legend w-full mt-6">
         <!-- Položky legendy sa vygenerujú sem -->
     </div>
 </div>
