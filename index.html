@@ -58,6 +58,33 @@ body {
 }
 
 /* ========================================= */
+/* 🔥 OPRAVA LEGENDY (User Solution)         */
+/* ========================================= */
+.legend-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-start;
+}
+.legend-item {
+    border: 1px solid #e5e7eb;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;      /* názvy sa nebudú lámať */
+    max-width: none !important;
+    /* Pridané pre pekné zobrazenie */
+    display: flex;
+    align-items: center;
+    background-color: #f9fafb;
+    justify-content: space-between;
+}
+.legend-color {
+    flex-shrink: 0;
+    margin-right: 8px; /* Odsadenie farby od textu */
+}
+
+/* ========================================= */
 /* 🔥 OPRAVA TABUĽKY: SCROLLOVANIE           */
 /* ========================================= */
 .table-container {
@@ -113,7 +140,9 @@ body {
         width: 700px !important;
     }
     #custom-legend-container {
+        /* V tlači ponecháme mriežku, vyzerá to tam lepšie */
         display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
     }
     
     /* Pri tlači tabuľku roztiahneme a zalomíme text */
@@ -243,7 +272,8 @@ Pridať
     <div id="myChart" style="width: 100%;"></div>
     
     <!-- Vlastná legenda pod grafom -->
-    <div id="custom-legend-container" class="w-full mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+    <!-- 🔥 POUŽITIE NOVEJ TRIEDY PRE LEGENDU -->
+    <div id="custom-legend-container" class="legend-container w-full mt-6">
         <!-- Položky legendy sa vygenerujú sem -->
     </div>
 </div>
@@ -915,13 +945,14 @@ function updateChart() {
                     const color = colors[index % colors.length];
 
                     const legendItem = document.createElement('div');
-                    legendItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm';
+                    // 🔥 UPRAVENÉ PRE POUŽITIE NOVEJ TRIEDY .legend-item
+                    legendItem.className = 'legend-item shadow-sm';
                     legendItem.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <div class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${color};"></div>
+                        <div class="flex items-center gap-2">
+                            <div class="legend-color" style="background-color: ${color};"></div>
                             <span class="font-medium text-gray-800 break-words">${name}</span>
                         </div>
-                        <div class="text-right">
+                        <div class="text-right ml-2">
                             <div class="font-bold text-gray-900">${amount.toFixed(2)} €</div>
                             <div class="text-xs text-gray-500 font-bold">${percentage} %</div>
                         </div>
@@ -1171,18 +1202,12 @@ async function handlePrintChartAndTable() {
                     grid-template-columns: 1fr 1fr;
                     gap: 10px;
                 }
-               .legend-item {
-    border: 1px solid #e5e7eb;
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 11px;
-
-    white-space: nowrap;      /* názvy sa nerozbijú na viac riadkov */
-    overflow: visible;        /* nič sa neskryje ani neoreže */
-    flex-shrink: 0;           /* legenda sa NEZMENŠÍ pri graf och */
-}
-
-                
+                .legend-item {
+                    border: 1px solid #e5e7eb;
+                    padding: 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                }
                 
                 .summary-box {
                     background-color: #f8fafc;
@@ -1482,4 +1507,3 @@ window.addEventListener("afterprint", () => {
 </script>
 </body>
 </html>
-
