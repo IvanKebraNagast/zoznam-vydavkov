@@ -44,7 +44,6 @@ body {
 /* ========================================= */
 /* 🔥 OPRAVA GRAFU: POVOLENIE PRETEKANIA     */
 /* ========================================= */
-/* Toto zabezpečí, že labels (Alkohol, Nájom) môžu ísť "mimo" rámček grafu a neodrežú sa */
 .highcharts-container, 
 .highcharts-data-label, 
 .highcharts-label,
@@ -52,13 +51,12 @@ body {
     overflow: visible !important;
 }
 
-/* KĽÚČOVÁ OPRAVA: Hlavný kontajner grafu nesmie mať hidden, inak odreže labels */
 #pie-chart-section {
     overflow: visible !important; 
 }
 
 /* ========================================= */
-/* 🔥 OPRAVA LEGENDY (Váš CSS Fix)           */
+/* 🔥 OPRAVA LEGENDY (Fixná šírka)           */
 /* ========================================= */
 
 .legend-container {
@@ -68,25 +66,20 @@ body {
     align-items: flex-start;
 }
 
-/* Vložené vaše riešenie pre .legend */
 .legend {
     flex-shrink: 0 !important;
-    min-width: 160px !important; /* zabezpečí minimálnu šírku */
+    min-width: 160px !important;
     overflow: visible !important;
 }
 
-/* Upravené vaše riešenie pre .legend-item */
 .legend-item {
     border: 1px solid #e5e7eb;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 11px;
-    
-    /* 🔥 KĽÚČOVÉ OPRAVY OREZÁVANIA */
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: unset !important;
-    
     max-width: none !important;
     display: flex;
     align-items: center;
@@ -96,35 +89,34 @@ body {
 
 .legend-color {
     flex-shrink: 0;
-    margin-right: 8px; /* Odsadenie farby od textu */
+    margin-right: 8px; 
 }
 
 /* ========================================= */
 /* 🔥 OPRAVA TABUĽKY: SCROLLOVANIE           */
 /* ========================================= */
 .table-container {
-    overflow-x: auto !important; /* Povolí horizontálny posun */
-    -webkit-overflow-scrolling: touch; /* Plynulé posúvanie na iPhone */
+    overflow-x: auto !important; 
+    -webkit-overflow-scrolling: touch; 
     width: 100%;
     display: block;
 }
 
 .expenses-table td, 
 .expenses-table th {
-    white-space: nowrap; /* Vynúti jeden riadok -> spustí scroll */
+    white-space: nowrap;
 }
 
 /* ========================================= */
 
-/* Poistka pre minimálnu výšku grafu na obrazovke */
 #myChart {
     min-height: 500px !important;
 }
 
-/* Responsívne úpravy pre mobil */
 @media (max-width: 768px) {
     #myChart {
-        min-height: 550px !important; 
+        /* Na mobile stačí menšia výška, aby nebolo toľko bieleho miesta */
+        min-height: 400px !important; 
     }
     h1 { font-size: 1.5rem !important; }
     .container { padding: 1rem !important; }
@@ -155,12 +147,10 @@ body {
         width: 700px !important;
     }
     #custom-legend-container {
-        /* V tlači ponecháme mriežku, vyzerá to tam lepšie */
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
     }
     
-    /* Pri tlači tabuľku roztiahneme a zalomíme text */
     .table-container {
         overflow-x: visible !important;
     }
@@ -174,7 +164,6 @@ body {
 <body class="bg-gray-100 flex min-h-screen p-4">
 
 <!-- Hlavný obsah aplikácie -->
-<!-- 🔥 ODSTRÁNENÉ "overflow-hidden" z tried nižšie, to spôsobovalo orezanie grafu! -->
 <div id="main-content" class="container mx-auto bg-white shadow-xl rounded-2xl p-8 space-y-8 max-w-4xl" style="overflow: visible !important;">
 
 <header class="text-center">
@@ -287,7 +276,6 @@ Pridať
     <div id="myChart" style="width: 100%;"></div>
     
     <!-- Vlastná legenda pod grafom -->
-    <!-- 🔥 PRIDANÁ TRIEDA .legend do HTML -->
     <div id="custom-legend-container" class="legend-container legend w-full mt-6">
         <!-- Položky legendy sa vygenerujú sem -->
     </div>
@@ -871,8 +859,10 @@ function updateChart() {
                     alpha: 45,
                     beta: 0
                 },
-                // 🔥 Zväčšili sme okraje na mobile, aby text mal kam ísť (do výšky)
-                margin: isMobile ? [30, 0, 30, 0] : [40, 40, 40, 40],
+                // 🔥 KĽÚČOVÁ ZMENA: PRIDANIE SPACINGU ABY GRAF NEBOL NALEPENÝ
+                spacing: [10, 0, 10, 0],
+                // Margin necham automatic, lebo spacing uz robi pracu
+                // margin: isMobile ? [30, 0, 30, 0] : [40, 40, 40, 40],
                 spacingTop: 20,
                 spacingBottom: 20
             },
@@ -891,9 +881,8 @@ function updateChart() {
             },
             plotOptions: {
                 pie: {
-                    // 🔥 FIX: 70% je maximum na mobile pre externé labels. 
-                    // Pretože sme zväčšili výšku kontajnera, labels sa upracú hore/dole.
-                    size: isMobile ? '70%' : '60%', 
+                    // 🔥 ULTRA DÔLEŽITÉ: Zmenšený kruh na mobile na 50%, aby ostalo miesto na text
+                    size: isMobile ? '50%' : '60%', 
                     center: ['50%', '50%'],
                     allowPointSelect: true,
                     cursor: 'pointer',
@@ -902,8 +891,8 @@ function updateChart() {
                         enabled: true,
                         crop: false,
                         overflow: 'allow',
-                        // 🔥 Malý odstup na mobile, aby sa text lepšie vošiel
-                        distance: isMobile ? 15 : 30, 
+                        // 🔥 SKRÁTENÁ VZDIALENOSŤ: Paličky sú kratšie
+                        distance: isMobile ? 10 : 30, 
                         connectorPadding: 0,
                         connectorColor: '#333',
                         backgroundColor: 'rgba(255, 255, 255, 0.8)', 
@@ -921,10 +910,8 @@ function updateChart() {
                             fontSize: isMobile ? '11px' : '12px',
                             textOutline: 'none', 
                             fontWeight: 'normal',
-                            // 🔥 TOTO JE KĽÚČOVÉ: Zalamovanie textu na mobile
-                            // Ak je text príliš široký, Highcharts zmenší graf. 
-                            // Týmto ho donútime text zalomiť a graf nechať veľký.
-                            width: isMobile ? '80px' : '120px',
+                            // 🔥 ZÚŽENÁ ŠÍRKA TEXTU: Donúti "Darček pre mamku" zalomiť sa skôr
+                            width: isMobile ? '60px' : '120px',
                             whiteSpace: 'normal' 
                         },
                         filter: {
