@@ -1171,12 +1171,18 @@ async function handlePrintChartAndTable() {
                     grid-template-columns: 1fr 1fr;
                     gap: 10px;
                 }
-                .legend-item {
-                    border: 1px solid #e5e7eb;
-                    padding: 8px;
-                    border-radius: 4px;
-                    font-size: 11px;
-                }
+               .legend-item {
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 11px;
+
+    white-space: nowrap;      /* názvy sa nerozbijú na viac riadkov */
+    overflow: visible;        /* nič sa neskryje ani neoreže */
+    flex-shrink: 0;           /* legenda sa NEZMENŠÍ pri graf och */
+}
+
+                
                 
                 .summary-box {
                     background-color: #f8fafc;
@@ -1476,3 +1482,4 @@ window.addEventListener("afterprint", () => {
 </script>
 </body>
 </html>
+
