@@ -1,1 +1,1528 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sledovanie výdavkov</title>
+
+<!-- 🔥 PWA NASTAVENIA PRE iPHONE -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Výdavky">
+
+<!-- 🔥 ODKAZ NA TVOJU IKONU -->
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+<!-- Highcharts Scripty -->
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/highcharts-3d.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+body {
+    font-family: 'Inter', sans-serif;
+    /* Zabraňuje "gumovému" efektu pri scrollovaní celej stránky na iOS */
+    overscroll-behavior-y: none;
+}
+.modal {
+    background-color: rgba(0, 0, 0, 0.5);
+    transition: opacity 0.3s ease-in-out;
+}
+.modal-content {
+    animation: fadeInScale 0.3s ease-in-out forwards;
+}
+.sidebar {
+    transition: transform 0.3s ease-in-out;
+}
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+/* Skrytie Highcharts loga a kreditov */
+.highcharts-credits {
+    display: none;
+}
+
+/* ========================================= */
+/* 🔥 OPRAVA GRAFU: POVOLENIE PRETEKANIA     */
+/* ========================================= */
+.highcharts-container, 
+.highcharts-data-label, 
+.highcharts-label,
+#myChart svg {
+    overflow: visible !important;
+}
+
+#pie-chart-section {
+    overflow: visible !important; 
+}
+
+/* ========================================= */
+/* 🔥 OPRAVA LEGENDY (Fixná šírka)           */
+/* ========================================= */
+
+.legend-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.legend {
+    flex-shrink: 0 !important;
+    min-width: 160px !important;
+    overflow: visible !important;
+}
+
+.legend-item {
+    border: 1px solid #e5e7eb;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    max-width: none !important;
+    display: flex;
+    align-items: center;
+    background-color: #f9fafb;
+    justify-content: space-between;
+}
+
+.legend-color {
+    flex-shrink: 0;
+    margin-right: 8px; 
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+/* ========================================= */
+/* 🔥 OPRAVA TABUĽKY: SCROLLOVANIE           */
+/* ========================================= */
+.table-container {
+    overflow-x: auto !important; 
+    -webkit-overflow-scrolling: touch; 
+    width: 100%;
+    display: block;
+}
+
+.expenses-table td, 
+.expenses-table th {
+    white-space: nowrap;
+}
+
+/* ========================================= */
+
+#myChart {
+    min-height: 500px !important;
+}
+
+@media (max-width: 768px) {
+    #myChart {
+        /* Na mobile stačí menšia výška, aby nebolo toľko bieleho miesta */
+        min-height: 400px !important; 
+    }
+    h1 { font-size: 1.5rem !important; }
+    .container { padding: 1rem !important; }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body, html {
+        height: auto;
+        overflow: visible;
+        margin: 0;
+        padding: 0;
+    }
+    
+    #pie-chart-section, #myChart {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        transform: none !important;
+    }
+    
+    #myChart {
+        height: 500px !important;
+        width: 700px !important;
+    }
+    #custom-legend-container {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+    }
+    
+    .table-container {
+        overflow-x: visible !important;
+    }
+    .expenses-table td, 
+    .expenses-table th {
+        white-space: normal !important;
+    }
+}
+</style>
+</head>
+<body class="bg-gray-100 flex min-h-screen p-4">
+
+<!-- Hlavný obsah aplikácie -->
+<div id="main-content" class="container mx-auto bg-white shadow-xl rounded-2xl p-8 space-y-8 max-w-4xl" style="overflow: visible !important;">
+
+<header class="text-center">
+<h1 class="text-4xl font-bold text-blue-900 mb-2">Sledovanie výdavkov</h1>
+<div class="inline-block px-4 py-1.5 bg-gray-200 rounded-full text-gray-700 text-sm font-medium">
+Vytvoril: IvanKebraNagast
+</div>
+<p id="cycle-dates" class="text-gray-600">
+Sledovanie rozpočtu.
+</p>
+</header>
+
+<!-- Sekcia pre správu cyklov -->
+<section class="bg-gray-50 p-6 rounded-xl border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4 no-print">
+<h2 class="text-xl font-bold text-gray-800">Správa cyklov</p>
+<div class="flex gap-4 w-full md:w-auto">
+<button id="start-new-cycle-btn" class="flex-1 px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:outline-none">
+Ukončiť aktuálny cyklus a začať nový
+</button>
+<button id="view-history-btn" class="flex-1 px-6 py-2.5 bg-gray-600 text-white font-bold rounded-lg shadow-md hover:bg-gray-700 focus:ring-4 focus:ring-gray-500 focus:outline-none">
+Zobraziť históriu
+</button>
+</div>
+</section>
+
+<!-- Zjednotená sekcia s formulármi pre aktuálny cyklus -->
+<div id="current-cycle-forms">
+<!-- New sections for income and budget summary -->
+<section class="bg-gray-50 p-6 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
+<div class="flex flex-col items-start space-y-2">
+<label for="monthly-income-input" class="text-sm font-medium text-gray-700">Celkový príjem (€)</label>
+<input type="number" id="monthly-income-input" placeholder="0.00" step="0.01" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+<button id="save-income-btn" class="w-full px-6 py-2.5 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 focus:ring-4 focus:ring-green-500 focus:outline-none">Uložiť príjem</button>
+</div>
+<div class="flex flex-col items-center justify-center bg-blue-100 p-4 rounded-lg">
+<span class="text-sm font-medium text-blue-800">Minul som</span>
+<span id="total-spent" class="text-2xl font-bold text-blue-600 mt-1">0.00 €</span>
+</div>
+<div id="remaining-budget-container" class="flex flex-col items-center justify-center p-4 rounded-lg">
+<span class="text-sm font-medium text-green-800">Zostáva mi</span>
+<span id="remaining-budget" class="text-2xl font-bold mt-1">0.00 €</span>
+</div>
+</section>
+
+<!-- Budget Rule section -->
+<section class="bg-gray-50 p-6 rounded-xl border border-gray-200 no-print">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Rozpočtové pravidlo</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+<div class="input-group">
+<label for="budget-category-select" class="block text-sm text-gray-700 mb-1">Položka pre rozpočet</label>
+<select id="budget-category-select" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+<!-- Options will be added dynamically -->
+</select>
+</div>
+<div class="input-group">
+<label for="budget-amount-input" class="block text-sm text-gray-700 mb-1">Rozpočet (€)</label>
+<input type="number" id="budget-amount-input" placeholder="100.00" step="0.01" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+</div>
+<button id="save-budget-btn" class="w-full px-6 py-2.5 bg-yellow-600 text-white font-bold rounded-lg shadow-md hover:bg-yellow-700 focus:ring-4 focus:ring-yellow-500 focus:outline-none">
+Uložiť rozpočet
+</button>
+</div>
+<div id="budget-bar-chart-container" class="relative w-full max-w-2xl mx-auto mt-6 hidden">
+<canvas id="budget-bar-chart"></canvas>
+</div>
+<!-- Pridaný kontajner pre zobrazenie stavu rozpočtov -->
+<div id="budget-status-container" class="mt-6 space-y-4"></div>
+</section>
+
+<!-- Add new expense section -->
+<section class="bg-gray-50 p-6 rounded-xl border border-gray-200 no-print">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Pridať nový výdavok</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+<div class="input-group" id="expense-category-container">
+<label for="expense-category" class="block text-sm text-gray-700 mb-1">Položka</label>
+<select id="expense-category" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+<!-- Options will be added dynamically, including "Vlastná položka" -->
+</select>
+</div>
+
+<!-- NOVÉ POLE PRE VLASTNÚ KATEGÓRIU -->
+<div class="input-group hidden" id="custom-category-input-group">
+<label for="custom-category-input" class="block text-sm text-gray-700 mb-1">Vlastná položka</label>
+<input type="text" id="custom-category-input" placeholder="Napr. Darček pre Petra" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+</div>
+<!-- KONIEC NOVÉHO POĽA -->
+
+<div class="input-group">
+<label for="expense-amount" class="block text-sm text-gray-700 mb-1">Suma (€)</label>
+<input type="number" id="expense-amount" placeholder="50.00" step="0.01" class="w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500">
+</div>
+<button id="add-expense-btn" class="w-full px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:outline-none">
+Pridať
+</button>
+</div>
+</section>
+</div>
+
+<!-- Sekcia so správou pre historický režim -->
+<div id="history-view-message" class="hidden bg-gray-200 p-6 rounded-xl text-center">
+<p class="text-xl font-bold text-gray-700">Momentálne prezeráte historický cyklus.</p>
+<p class="text-sm text-gray-600 mt-2">Dáta sú len na čítanie. Ak chcete pridávať výdavky, vráťte sa k aktuálnemu cyklu.</p>
+</div>
+
+<!-- Chart and table section -->
+<section class="flex flex-col lg:flex-row gap-8">
+<!-- Pie chart -->
+<div id="pie-chart-section" class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center" style="overflow: visible !important;">
+    <!-- Kontajner pre graf -->
+    <div id="myChart" style="width: 100%;"></div>
+    
+    <!-- Vlastná legenda pod grafom -->
+    <div id="custom-legend-container" class="legend-container legend w-full mt-6">
+        <!-- Položky legendy sa vygenerujú sem -->
+    </div>
+</div>
+
+<!-- Expense table -->
+<div class="flex-1 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Prehľad výdavkov</h2>
+<!-- 🔥 TABLE CONTAINER: overflow-x-auto umožní swipovanie do strany -->
+<div class="table-container">
+<table class="min-w-full table-auto text-center expenses-table">
+<thead>
+<tr class="bg-gray-200 text-gray-600 uppercase text-sm leading-normal">
+<th class="py-3 px-6 text-left">Dátum a položka</th>
+<th class="py-3 px-6 text-left">Suma (€)</th>
+</tr>
+</thead>
+<tbody id="expense-table-body" class="text-gray-700 text-sm font-light">
+<!-- Rows will be added dynamically -->
+</tbody>
+</table>
+</div>
+<button id="delete-current-cycle-btn" class="mt-4 w-full px-6 py-2.5 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 focus:ring-4 focus:ring-red-500 focus:outline-none no-print">
+Vymazať dáta aktuálneho cyklus
+</button>
+</div>
+</section>
+
+<!-- Tlačidlo pre otvorenie tlačového okna -->
+<section class="mt-4 flex justify-center">
+<button id="print-all-btn" class="flex items-center gap-2 px-6 py-2.5 bg-gray-600 text-white font-bold rounded-lg shadow-md hover:bg-gray-700 focus:ring-4 focus:ring-gray-500 focus:outline-none">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width: 1rem; height: 1rem; fill: currentColor;"><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64c0-17.7 14.3-32 32-32H352c17.7 0 32 14.3 32 32v96h64V64c0-35.3-28.7-64-64-64H128zM0 192c0-35.3 28.7-64 64-64H448c35.3 0 64 28.7 64 64v32V416c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V224 192zm64 64V416H448V256H64zM200 352h112c4.4 0 8-3.6 8-8c0-4.4-3.6-8-8-8H200c-4.4 0-8 3.6-8 8c0 4.4 3.6 8 8 8z"/></svg>
+    Tlačiť
+</button>
+</section>
+
+<!-- Success or error message -->
+<div id="message-box" class="fixed bottom-4 left-1/2 -translate-x-1/2 p-4 rounded-xl shadow-lg transition-all duration-300 hidden no-print" style="transform: translateX(-50%);">
+<p id="message-text" class="font-medium text-white"></p>
+</div>
+
+<!-- Confirmation dialog -->
+<div id="confirmation-dialog" class="modal fixed inset-0 flex items-center justify-center p-4 z-50 hidden no-print">
+<div class="modal-content bg-white rounded-xl shadow-2xl p-8 max-w-sm mx-auto space-y-6">
+<h3 class="text-2xl font-bold text-gray-800">Potvrdenie</h3>
+<p id="confirmation-message" class="text-gray-700">Naozaj chcete ukoniť aktuálny rozpočtový cyklus a začať nový? Aktuálne dáta budú uložené a aplikácia sa vynuluje.</p>
+<div class="flex justify-end gap-4">
+<button id="cancel-btn" class="px-6 py-2.5 bg-gray-300 text-gray-800 font-bold rounded-lg hover:bg-gray-400">
+Zrušiť
+</button>
+<button id="confirm-btn" class="px-6 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">
+Potvrdiť
+</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Bočný panel pre históriu cyklov -->
+<div id="history-sidebar" class="sidebar fixed top-0 right-0 h-full w-80 bg-gray-900 text-white p-6 transform translate-x-full z-40 shadow-lg overflow-y-auto no-print">
+<div class="flex justify-between items-center mb-6">
+<h2 class="text-2xl font-bold">História cyklov</h2>
+<button id="close-history-btn" class="text-2xl font-bold hover:text-gray-400">×</button>
+</div>
+<div id="history-list" class="space-y-4">
+<!-- Historické cykly sa tu zobrazia dynamicky -->
+</div>
+<button id="delete-history-btn" class="mt-4 w-full px-6 py-2.5 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 focus:ring-4 focus:ring-red-500 focus:outline-none">
+Vymazať celú históriu
+</button>
+<button id="back-to-current-btn" class="mt-4 w-full px-6 py-2.5 bg-gray-500 text-white font-bold rounded-lg shadow-md hover:bg-gray-600 focus:ring-4 focus:ring-gray-400 focus:outline-none">
+Späť na aktuálny cyklus
+</button>
+</div>
+
+<!-- Ponechal som Chart.js pre stĺpcový graf (Budget) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Global variables for application state
+let expenses = [];
+let pieChart; 
+let budgetChart;
+let monthlyIncome = 0;
+let monthlyBudget = {}; // Store budgets per category
+let messageTimeout;
+let cycleStartDate = null; 
+
+const currentCycleKey = 'expenseTrackerData-current';
+const archiveKeyPrefix = 'expenseTrackerData-archived-';
+let isHistoryView = false;
+
+// Expense categories
+let expenseCategories = [
+'Nájomné',
+'Internet',
+'Elektrika',
+'Kúrenie',
+'Poistka za auto',
+'Poistenie zodpovednosti za byt',
+'Potraviny',
+'Doprava',
+'Zábava',
+'Cigarety',
+'Alkohol',
+'Ostatné'
+];
+
+const CUSTOM_CATEGORY_OPTION = 'CUSTOM_CATEGORY_INPUT';
+
+function getAllCategories() {
+    let allCategories = new Set(expenseCategories);
+    expenses.forEach(e => allCategories.add(e.category));
+    Object.keys(monthlyBudget).forEach(b => allCategories.add(b));
+    return Array.from(allCategories).sort();
+}
+
+function saveDataToLocalStorage(key = currentCycleKey) {
+const data = {
+expenses,
+monthlyIncome,
+monthlyBudget,
+cycleStartDate: cycleStartDate ? cycleStartDate.toISOString() : null,
+};
+localStorage.setItem(key, JSON.stringify(data));
+}
+
+function loadDataFromLocalStorage(key = currentCycleKey) {
+try {
+    const data = JSON.parse(localStorage.getItem(key));
+    if (data) {
+        expenses = data.expenses || [];
+        monthlyIncome = data.monthlyIncome || 0;
+        monthlyBudget = data.monthlyBudget || {};
+        cycleStartDate = data.cycleStartDate ? new Date(data.cycleStartDate) : null;
+        const incomeInput = document.getElementById('monthly-income-input');
+        if(incomeInput) incomeInput.value = monthlyIncome;
+    } else {
+        expenses = [];
+        monthlyIncome = 0;
+        monthlyBudget = {};
+        cycleStartDate = null;
+    }
+} catch (e) {
+    console.error("Chyba pri načítaní dát:", e);
+    expenses = [];
+    monthlyIncome = 0;
+    monthlyBudget = {};
+    cycleStartDate = null;
+}
+}
+
+function renderAllUI() {
+// Zabalenie do try-catch pre stabilitu
+try {
+    const historyMessageEl = document.getElementById('history-view-message');
+    const currentFormsEl = document.getElementById('current-cycle-forms');
+    const chartSection = document.getElementById('pie-chart-section');
+    const budgetRuleSection = document.querySelector('section:nth-of-type(3)');
+    const deleteBtn = document.getElementById('delete-current-cycle-btn');
+    const printBtn = document.getElementById('print-all-btn');
+
+    renderUI(); 
+
+    if (isHistoryView) {
+        currentFormsEl?.classList.add('hidden');
+        chartSection?.classList.add('hidden');
+        budgetRuleSection?.classList.add('hidden');
+        deleteBtn?.classList.add('hidden');
+        historyMessageEl?.classList.remove('hidden');
+        if(printBtn) printBtn.textContent = 'Vytlačiť historický prehľad';
+    } else {
+        currentFormsEl?.classList.remove('hidden');
+        chartSection?.classList.remove('hidden');
+        budgetRuleSection?.classList.remove('hidden');
+        deleteBtn?.classList.remove('hidden');
+        historyMessageEl?.classList.add('hidden');
+        if(printBtn) printBtn.textContent = 'Vytlačiť prehľad';
+        updateChart();
+        updateBudgetRuleChart();
+        updateBudgetStatus();
+    }
+
+    renderTable();
+    updateBudgetSummary();
+    updateCycleDatesDisplay();
+} catch (e) {
+    console.error("Chyba v renderAllUI:", e);
+}
+}
+
+function startNewCycle() {
+if (expenses.length === 0 && monthlyIncome === 0) {
+showMessage('Nie sú žiadne dáta na ukončenie aktuálneho cyklu.', 'error');
+return;
+}
+
+showConfirmationDialog('Naozaj chcete ukončiť aktuálny rozpočtový cyklus a začať nový? Aktuálne dáta budú uložené a aplikácia sa vynuluje.', () => {
+const cycleEndDate = new Date();
+const archiveKey = `${archiveKeyPrefix}${cycleEndDate.toISOString()}`;
+
+const dataToArchive = JSON.parse(localStorage.getItem(currentCycleKey));
+if (dataToArchive) {
+const finalData = {
+...dataToArchive,
+cycleStartDate: dataToArchive.cycleStartDate || cycleEndDate.toISOString(),
+cycleEndDate: cycleEndDate.toISOString(),
+};
+localStorage.setItem(archiveKey, JSON.stringify(finalData));
+}
+
+expenses = [];
+monthlyIncome = 0;
+monthlyBudget = {};
+cycleStartDate = null;
+saveDataToLocalStorage();
+
+document.getElementById('monthly-income-input').value = '';
+document.getElementById('budget-amount-input').value = '';
+renderAllUI(); 
+isHistoryView = false;
+renderAllUI();
+
+showMessage('Bol spustený nový rozpočtový cyklus!', 'success');
+});
+}
+
+function loadArchivedCycle(key) {
+const data = JSON.parse(localStorage.getItem(key));
+if (data) {
+expenses = data.expenses || [];
+monthlyIncome = data.monthlyIncome || 0;
+monthlyBudget = data.monthlyBudget || {};
+const start = data.cycleStartDate ? new Date(data.cycleStartDate) : null;
+const end = data.cycleEndDate ? new Date(data.cycleEndDate) : null;
+
+cycleStartDate = start;
+
+isHistoryView = true;
+
+updateCycleDatesDisplay(start, end);
+document.getElementById('monthly-income-input').value = monthlyIncome;
+
+showMessage('Zobrazujem historický cyklus.', 'info');
+
+renderAllUI();
+
+document.getElementById('history-sidebar').classList.add('translate-x-full');
+}
+}
+
+function backToCurrentCycle() {
+loadDataFromLocalStorage(currentCycleKey);
+isHistoryView = false;
+document.getElementById('history-sidebar').classList.add('translate-x-full');
+showMessage('Späť pri aktuálnom cykle.', 'info');
+
+renderAllUI();
+}
+
+function renderHistorySidebar() {
+const historyList = document.getElementById('history-list');
+historyList.innerHTML = '';
+
+const archivedKeys = Object.keys(localStorage).filter(key => key.startsWith(archiveKeyPrefix));
+
+if (archivedKeys.length === 0) {
+historyList.innerHTML = `<p class="text-gray-400">Zatiaľ žiadna história cyklov.</p>`;
+return;
+}
+
+const sortedKeys = archivedKeys.sort().reverse();
+
+sortedKeys.forEach(key => {
+const data = JSON.parse(localStorage.getItem(key));
+if (!data || !data.cycleStartDate || !data.cycleEndDate) {
+return;
+}
+
+const start = new Date(data.cycleStartDate);
+const end = new Date(data.cycleEndDate);
+
+const totalSpent = (data.expenses || []).reduce((sum, expense) => sum + expense.amount, 0);
+const remaining = (data.monthlyIncome || 0) - totalSpent;
+
+const cycleItem = document.createElement('div');
+cycleItem.className = 'bg-gray-800 p-4 rounded-lg flex justify-between items-center transition-colors duration-200';
+
+const contentDiv = document.createElement('div');
+contentDiv.className = 'flex-grow cursor-pointer hover:text-gray-400';
+contentDiv.innerHTML = `
+<h4 class="font-bold text-lg">Cyklus: od ${start.toLocaleDateString('sk-SK')} do ${end.toLocaleDateString('sk-SK')}</h4>
+<p class="text-sm text-gray-400">Príjem: ${data.monthlyIncome.toFixed(2)} €</p>
+<p class="text-sm text-gray-400">Zostatok: ${remaining.toFixed(2)} €</p>
+`;
+contentDiv.addEventListener('click', () => {
+    loadArchivedCycle(key);
+});
+cycleItem.appendChild(contentDiv);
+
+const deleteBtn = document.createElement('button');
+deleteBtn.className = 'text-gray-500 hover:text-red-500 transition-colors duration-200 ml-4';
+deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+deleteBtn.title = 'Vymazať tento cyklus';
+deleteBtn.addEventListener('click', () => {
+    deleteSingleCycle(key, `od ${start.toLocaleDateString('sk-SK')} do ${end.toLocaleDateString('sk-SK')}`);
+});
+cycleItem.appendChild(deleteBtn);
+
+historyList.appendChild(cycleItem);
+});
+}
+
+function deleteSingleCycle(key, dateRange) {
+    showConfirmationDialog(`Naozaj chcete natrvalo vymazať cyklus pre obdobie: ${dateRange}? Túto akciu nie je možné vrátiť späť.`, () => {
+        localStorage.removeItem(key);
+        renderHistorySidebar();
+        showMessage('Cyklus bol úspešne vymazaný.', 'success');
+    });
+}
+
+function handleDeleteHistory() {
+showConfirmationDialog('Naozaj chcete natrvalo vymazať VŠETKY historické cykly? Túto akciu nie je možné vrátiť späť.', () => {
+    const archivedKeys = Object.keys(localStorage).filter(key => key.startsWith(archiveKeyPrefix));
+    archivedKeys.forEach(key => localStorage.removeItem(key));
+    renderHistorySidebar();
+    showMessage('Celá história bola úspešne vymazaná.', 'success');
+});
+}
+
+
+function showMessage(msg, type = 'success') {
+const messageBox = document.getElementById('message-box');
+const messageText = document.getElementById('message-text');
+
+clearTimeout(messageTimeout);
+
+messageText.textContent = msg;
+messageBox.classList.remove('hidden', 'bg-green-500', 'bg-red-500', 'bg-blue-500');
+
+if (type === 'success') {
+messageBox.classList.add('bg-green-500');
+} else if (type === 'error') {
+messageBox.classList.add('bg-red-500');
+} else {
+messageBox.classList.add('bg-blue-500');
+}
+
+messageTimeout = setTimeout(() => {
+messageBox.classList.add('hidden');
+}, 3000);
+}
+
+function showConfirmationDialog(message, onConfirm) {
+const dialog = document.getElementById('confirmation-dialog');
+const messageEl = document.getElementById('confirmation-message');
+const confirmBtn = document.getElementById('confirm-btn');
+const cancelBtn = document.getElementById('cancel-btn');
+
+messageEl.textContent = message;
+dialog.classList.remove('hidden');
+
+const closeDialog = () => {
+    dialog.classList.add('hidden');
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', handleCancel);
+    dialog.removeEventListener('click', handleOutsideClick); 
+};
+
+const handleConfirm = () => {
+    onConfirm();
+    closeDialog();
+};
+
+const handleCancel = () => {
+    closeDialog();
+};
+
+const handleOutsideClick = (event) => {
+    if (event.target === dialog) {
+        closeDialog();
+    }
+};
+
+confirmBtn.addEventListener('click', handleConfirm);
+cancelBtn.addEventListener('click', handleCancel);
+dialog.addEventListener('click', handleOutsideClick);
+}
+
+function handleAddExpense() {
+if (isHistoryView) {
+showMessage('Nemôžete pridávať výdavky do historického cyklu. Vráťte sa k aktuálnemu cyklu.', 'error');
+return;
+}
+
+const expenseAmount = parseFloat(document.getElementById('expense-amount').value);
+
+if (isNaN(expenseAmount) || expenseAmount <= 0) {
+showMessage('Prosím, zadajte platnú sumu.', 'error');
+return;
+}
+
+let expenseCategory = document.getElementById('expense-category').value;
+const customCategoryInput = document.getElementById('custom-category-input');
+
+if (expenseCategory === CUSTOM_CATEGORY_OPTION) {
+    expenseCategory = customCategoryInput.value.trim();
+    if (expenseCategory === '') {
+        showMessage('Prosím, zadajte názov vlastnej položky.', 'error');
+        return;
+    }
+}
+
+expenses.push({
+date: new Date().toISOString(),
+category: expenseCategory,
+amount: expenseAmount,
+});
+showMessage(`Výdavok bol úspešne pridaný!`, 'success');
+
+document.getElementById('expense-amount').value = '';
+document.getElementById('expense-category').value = expenseCategories[0] || ''; 
+customCategoryInput.value = '';
+document.getElementById('custom-category-input-group').classList.add('hidden'); 
+
+saveDataToLocalStorage();
+renderAllUI();
+}
+
+function handleDeleteCurrentCycle() {
+if (isHistoryView) {
+showMessage('Nemôžete mazať dáta v historickom cykle. Vráťte sa k aktuálnemu cyklu.', 'error');
+return;
+}
+
+if (expenses.length === 0 && monthlyIncome === 0) {
+showMessage('Nie sú žiadne dáta na vymazanie v aktuálnom cykle.', 'error');
+return;
+}
+
+showConfirmationDialog('Naozaj chcete vymazať VŠETKY dáta (výdavky, príjem a rozpočty) za AKTUÁLNY cyklus?', () => {
+expenses = [];
+monthlyIncome = 0;
+monthlyBudget = {};
+cycleStartDate = null;
+
+saveDataToLocalStorage();
+renderAllUI();
+showMessage('Dáta za aktuálny cyklus boli úspešne vymazané.', 'success');
+});
+}
+
+function handleSaveIncome() {
+if (isHistoryView) {
+showMessage('Nemôžete ukladať príjem do historického cyklu. Vráťte sa k aktuálnemu cyklu.', 'error');
+return;
+}
+const income = parseFloat(document.getElementById('monthly-income-input').value);
+if (isNaN(income) || income < 0) {
+showMessage('Zadajte platný príjem.', 'error');
+return;
+}
+monthlyIncome = income;
+
+if (!cycleStartDate) {
+cycleStartDate = new Date();
+}
+
+showMessage('Príjem bol uložený!', 'success');
+
+saveDataToLocalStorage();
+renderAllUI();
+}
+
+function handleSaveBudget() {
+if (isHistoryView) {
+showMessage('Nemôžete ukladať rozpočty do historického cyklu. Vráťte sa k aktuálnemu cyklu.', 'error');
+return;
+}
+const category = document.getElementById('budget-category-select').value;
+const budgetAmount = parseFloat(document.getElementById('budget-amount-input').value);
+
+if (!category) {
+    showMessage('Vyberte prosím položku.', 'error');
+    return;
+}
+
+if (isNaN(budgetAmount) || budgetAmount < 0) {
+showMessage('Zadajte platnú sumu rozpočtu.', 'error');
+return;
+}
+monthlyBudget[category] = budgetAmount;
+showMessage('Rozpočet bol uložený!', 'success');
+
+saveDataToLocalStorage();
+renderAllUI();
+
+// 🔥 RESETOVANIE POLÍ PO ULOŽENÍ
+document.getElementById('budget-amount-input').value = '';
+document.getElementById('budget-category-select').value = '';
+}
+
+function updateBudgetSummary() {
+const totalAmountSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+const remaining = monthlyIncome - totalAmountSpent;
+
+document.getElementById('total-spent').textContent = `${totalAmountSpent.toFixed(2)} €`;
+
+const remainingBudgetEl = document.getElementById('remaining-budget');
+const remainingBudgetContainerEl = document.getElementById('remaining-budget-container');
+remainingBudgetEl.textContent = `${remaining.toFixed(2)} €`;
+
+remainingBudgetContainerEl.classList.remove('bg-green-100', 'bg-red-100', 'bg-yellow-100');
+remainingBudgetEl.classList.remove('text-green-600', 'text-red-600', 'text-yellow-600');
+
+if (remaining < 0) {
+remainingBudgetContainerEl.classList.add('bg-red-100');
+remainingBudgetEl.classList.add('text-red-600');
+} else if (remaining < monthlyIncome * 0.1) {
+remainingBudgetContainerEl.classList.add('bg-yellow-100');
+remainingBudgetEl.classList.add('text-yellow-600');
+} else {
+remainingBudgetContainerEl.classList.add('bg-green-100');
+remainingBudgetEl.classList.add('text-green-600');
+}
+}
+
+function renderTable() {
+const expenseTableBody = document.getElementById('expense-table-body');
+expenseTableBody.innerHTML = '';
+
+const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+if (sortedExpenses.length === 0) {
+const noDataRow = document.createElement('tr');
+noDataRow.innerHTML = `<td colspan="2" class="py-3 px-6 text-center text-gray-500">Zatiaľ žiadne dáta pre tento cyklus.</td>`;
+expenseTableBody.appendChild(noDataRow);
+return;
+}
+
+sortedExpenses.forEach(item => {
+const row = document.createElement('tr');
+row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-100');
+const date = new Date(item.date).toLocaleDateString('sk-SK');
+row.innerHTML = `
+<td class="py-3 px-6 text-left whitespace-nowrap">${date} - ${item.category}</td>
+<td class="py-3 px-6 text-left text-red-600">-${item.amount.toFixed(2)} €</td>
+`;
+expenseTableBody.appendChild(row);
+});
+}
+
+// 2️⃣ KÓD PRE 3D GRAF A VLASTNÚ LEGENDU
+// 1️⃣ UPDATECHART BEZ KOMPLEXNÉHO CALLBACKU (Pre stabilitu)
+function updateChart() {
+    try {
+        const categoryTotals = expenses.reduce((acc, expense) => {
+            acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+            return acc;
+        }, {});
+
+        const chartData = Object.entries(categoryTotals);
+        chartData.sort((a, b) => b[1] - a[1]);
+
+        const finalData = chartData.length > 0 ? chartData : [['Žiadne dáta', 1]];
+        const totalAmount = finalData.reduce((sum, item) => sum + (item[0] === 'Žiadne dáta' ? 0 : item[1]), 0);
+
+        if (typeof Highcharts === 'undefined') {
+            console.error('Highcharts nie je načítaný.');
+            return;
+        }
+
+        const isMobile = window.innerWidth < 768;
+        const colors = Highcharts.getOptions().colors;
+
+        const chartOptions = {
+            chart: {
+                type: 'pie',
+                backgroundColor: 'transparent',
+                options3d: {
+                    enabled: true,
+                    alpha: 45,
+                    beta: 0
+                },
+                // 🔥 KĽÚČOVÁ ZMENA: PRIDANIE SPACINGU ABY GRAF NEBOL NALEPENÝ
+                spacing: [10, 0, 10, 0],
+                spacingTop: 20,
+                spacingBottom: 20
+            },
+            exporting: {
+                enabled: false
+            },
+            title: {
+                text: 'Rozloženie výdavkov',
+                style: { color: '#1f2937', fontSize: isMobile ? '16px' : '20px', fontWeight: 'bold' }
+            },
+            tooltip: {
+                pointFormat: '{series.name}: <b>{point.y:.2f} €</b>'
+            },
+            legend: {
+                enabled: false 
+            },
+            plotOptions: {
+                pie: {
+                    // ULTRA DÔLEŽITÉ: Zmenšený kruh na mobile na 50%, aby ostalo miesto na text
+                    size: isMobile ? '50%' : '60%', 
+                    center: ['50%', '50%'],
+                    allowPointSelect: true,
+                    cursor: 'pointer',
+                    depth: 45,
+                    dataLabels: {
+                        enabled: true,
+                        crop: false,
+                        overflow: 'allow',
+                        // 🔥 DVE KĽÚČOVÉ ÚPRAVY PRE ZOBRAZENIE MALÝCH VÝSEKOV
+                        allowOverlap: true, // Povoliť, aby sa popisy prekrývali
+                        defer: false,       // Zobraz všetky popisy naraz (neskrývať automaticky)
+                        // KONIEC KĽÚČOVÝCH ÚPRAV
+                        
+                        // SKRÁTENÁ VZDIALENOSŤ: Paličky sú kratšie
+                        distance: isMobile ? 10 : 30, 
+                        connectorPadding: 0,
+                        connectorColor: '#333',
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                        borderRadius: 5,
+                        borderWidth: 1,
+                        borderColor: '#ddd',
+                        padding: 2,
+                        useHTML: true, 
+                        // 🔥 KĽÚČOVÁ ZMENA: Zobraziť len percento (nie názov)
+                        format: '<div style="text-align: center;">{point.percentage:.1f}%</div>',
+                        style: {
+                            color: '#333',
+                            fontSize: isMobile ? '11px' : '12px',
+                            textOutline: 'none', 
+                            fontWeight: 'normal',
+                            // ZÚŽENÁ ŠÍRKA TEXTU: Len pre prípad pretečenia
+                            width: '60px',
+                            whiteSpace: 'normal' 
+                        },
+                        filter: {
+                            property: 'percentage',
+                            operator: '>',
+                            value: 0 
+                        }
+                    }
+                }
+            },
+            series: [{
+                name: 'Suma',
+                data: finalData
+            }]
+        };
+
+        pieChart = Highcharts.chart('myChart', chartOptions);
+
+        // Generovanie legendy
+        const legendContainer = document.getElementById('custom-legend-container');
+        if(legendContainer) {
+            legendContainer.innerHTML = '';
+
+            if (chartData.length === 0) {
+                legendContainer.innerHTML = '<p class="text-gray-500 text-center col-span-full">Zatiaľ žiadne dáta pre legendu.</p>';
+            } else {
+
+                chartData.forEach((item, index) => {
+                    const name = item[0];
+                    const amount = item[1];
+                    const percentage = totalAmount > 0 ? (amount / totalAmount * 100).toFixed(1) : 0;
+                    const color = colors[index % colors.length];
+
+                    const legendItem = document.createElement('div');
+                    // 🔥 UPRAVENÉ PRE POUŽITIE NOVEJ TRIEDY .legend-item
+                    legendItem.className = 'legend-item shadow-sm';
+                    legendItem.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <div class="legend-color" style="background-color: ${color};"></div>
+                            <span class="font-medium text-gray-800 break-words">${name}</span>
+                        </div>
+                        <div class="text-right ml-2">
+                            <div class="font-bold text-gray-900">${amount.toFixed(2)} €</div>
+                            <div class="text-xs text-gray-500 font-bold">${percentage} %</div>
+                        </div>
+                    `;
+                    legendContainer.appendChild(legendItem);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Chyba v updateChart:", e);
+    }
+}
+
+function updateBudgetRuleChart() {
+    try {
+        const budgetChartContainer = document.getElementById('budget-bar-chart-container');
+        const budgetInfoContainer = document.getElementById('budget-info-container');
+        const budgetSummaryEl = document.getElementById('budget-info');
+
+        const budgetedCategories = Object.keys(monthlyBudget);
+        if (budgetedCategories.length === 0) {
+            if (budgetChart) budgetChart.destroy();
+            if (budgetChartContainer) budgetChartContainer.classList.add('hidden');
+            if (budgetInfoContainer) budgetInfoContainer.classList.add('hidden');
+            return;
+        }
+
+        if (budgetChartContainer) budgetChartContainer.classList.remove('hidden');
+        if (budgetInfoContainer) budgetInfoContainer.classList.remove('hidden');
+        if (budgetSummaryEl) budgetSummaryEl.innerHTML = '';
+
+        const spentData = budgetedCategories.map(cat => expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0));
+        const budgetData = budgetedCategories.map(cat => monthlyBudget[cat] || 0);
+
+        if (budgetChart) {
+            budgetChart.destroy();
+        }
+
+        const canvas = document.getElementById('budget-bar-chart');
+        if (!canvas) return; // Ochrana ak canvas chýba
+
+        const ctx = canvas.getContext('2d');
+        budgetChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: budgetedCategories,
+                datasets: [{
+                    label: 'Rozpočet',
+                    data: budgetData,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Minuté',
+                    data: spentData,
+                    backgroundColor: spentData.map((spent, index) => spent > budgetData[index] ? 'rgba(255, 99, 132, 0.5)' : 'rgba(54, 162, 235, 0.5)'),
+                    borderColor: spentData.map((spent, index) => spent > budgetData[index] ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Suma (€)'
+                        }
+                    }
+                }
+            },
+        });
+    } catch (e) {
+        console.error("Chyba v updateBudgetRuleChart:", e);
+    }
+}
+
+function updateBudgetStatus() {
+    const budgetStatusContainer = document.getElementById('budget-status-container');
+    if (!budgetStatusContainer) return;
+    
+    budgetStatusContainer.innerHTML = '';
+    const budgetedCategories = Object.keys(monthlyBudget);
+
+    if (budgetedCategories.length === 0) {
+        budgetStatusContainer.innerHTML = '<p class="text-gray-500 text-sm mt-2">Zatiaľ nemáte nastavený žiadny rozpočet.</p>';
+        return;
+    }
+
+    budgetedCategories.forEach(category => {
+        const budgetAmount = monthlyBudget[category];
+        const spentAmount = expenses.filter(e => e.category === category).reduce((sum, e) => sum + e.amount, 0);
+        const remaining = budgetAmount - spentAmount;
+        const percentageUsed = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
+
+        let statusText = '';
+        let statusColor = '';
+        let progressBarColor = '';
+
+        if (remaining < 0) {
+            statusText = 'Prekročený rozpočet';
+            statusColor = 'text-red-600';
+            progressBarColor = 'bg-red-500';
+        } else if (percentageUsed >= 80) {
+            statusText = 'Blíži sa k limitu';
+            statusColor = 'text-yellow-600';
+            progressBarColor = 'bg-yellow-500';
+        } else {
+            statusText = 'V rámci rozpočtu';
+            statusColor = 'text-green-600';
+            progressBarColor = 'bg-green-500';
+        }
+        
+        const progressBarWidth = Math.min(percentageUsed, 100);
+
+        const statusElement = document.createElement('div');
+        statusElement.className = 'bg-white p-4 rounded-lg shadow-sm border border-gray-200';
+        statusElement.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <span class="font-medium text-gray-700">${category}</span>
+                <span class="font-bold text-sm ${statusColor}">${statusText}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div class="h-2.5 rounded-full ${progressBarColor}" style="width: ${progressBarWidth}%;"></div>
+            </div>
+            <div class="flex justify-between text-xs mt-1 text-gray-500">
+                <span>Minuté: ${spentAmount.toFixed(2)} €</span>
+                <span>Rozpočet: ${budgetAmount.toFixed(2)} €</span>
+            </div>
+        `;
+        budgetStatusContainer.appendChild(statusElement);
+    });
+}
+
+
+async function handlePrintChartAndTable() {
+    try {
+        const chartSection = document.getElementById("pie-chart-section");
+        if(chartSection) chartSection.classList.remove("hidden");
+
+        updateChart();
+        updateBudgetRuleChart();
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        let pieChartSVG = '';
+        // Bezpečné získanie grafu
+        let activeChart = pieChart;
+        if (!activeChart && typeof Highcharts !== 'undefined' && Highcharts.charts) {
+             activeChart = Highcharts.charts.find(c => c !== undefined);
+        }
+
+        if (activeChart && typeof activeChart.getSVG === 'function') {
+            try {
+                pieChartSVG = activeChart.getSVG({
+                    chart: {
+                        width: 500,
+                        height: 350 
+                    },
+                    exporting: {
+                        enabled: false // Poistka
+                    }
+                });
+            } catch (svgError) {
+                console.warn("Nepodarilo sa vygenerovať SVG pre graf:", svgError);
+            }
+        }
+        
+        const legendContainer = document.getElementById('custom-legend-container');
+        const legendHTML = legendContainer ? legendContainer.innerHTML : '';
+
+        const budgetChartCanvas = document.getElementById('budget-bar-chart');
+        const budgetChartImage = budgetChartCanvas ? budgetChartCanvas.toDataURL('image/png', 1.0) : null;
+        
+        const dataToPrint = {
+            expenses: expenses,
+            monthlyIncome: monthlyIncome,
+            monthlyBudget: monthlyBudget,
+            cycleStartDate: cycleStartDate
+        };
+
+        const cycleStartDateString = dataToPrint.cycleStartDate ? new Date(dataToPrint.cycleStartDate).toLocaleDateString('sk-SK') : 'N/A';
+        const cycleEndDateString = new Date().toLocaleDateString('sk-SK');
+
+        const tableRows = dataToPrint.expenses.length > 0
+        ? dataToPrint.expenses.map(item => `
+            <tr class="border-b border-gray-200">
+                <td class="py-2 px-3 text-left whitespace-nowrap text-sm">${new Date(item.date).toLocaleDateString('sk-SK')} - ${item.category}</td>
+                <td class="py-2 px-3 text-right text-red-600 text-sm font-bold">-${item.amount.toFixed(2)} €</td>
+            </tr>
+        `).join('')
+        : `<tr><td colspan="2" class="py-3 px-6 text-center text-gray-500">Zatiaľ žiadne dáta pre tento cyklus.</td></tr>`;
+
+        const totalSpent = dataToPrint.expenses.reduce((sum, e) => sum + e.amount, 0);
+        const remaining = dataToPrint.monthlyIncome - totalSpent;
+        
+        const remainingColor = remaining < 0 ? '#dc2626' : (remaining < dataToPrint.monthlyIncome * 0.1 ? '#d97706' : '#16a34a');
+
+        const printContent = `
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+                body { 
+                    font-family: 'Inter', sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    color: #1f2937;
+                    background: #fff;
+                }
+                .print-container {
+                    max-width: 100%;
+                    padding: 20px;
+                }
+                .header {
+                    text-align: center;
+                    margin-bottom: 20px;
+                    border-bottom: 2px solid #e5e7eb;
+                    padding-bottom: 10px;
+                }
+                h1 { color: #1e3a8a; font-size: 24px; font-weight: bold; margin: 0; }
+                h2 { color: #1e3a8a; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+                p { margin: 5px 0; color: #4b5563; font-size: 14px; }
+                
+                /* 🔥 GRID LAYOUT LOGIC */
+                .grid-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .col-half {
+                    flex: 1;
+                    min-width: 45%;
+                }
+                .col-wide {
+                    flex: 3; /* 60% */
+                }
+                .col-narrow {
+                    flex: 2; /* 40% */
+                }
+                
+                table { width: 100%; border-collapse: collapse; text-align: left; }
+                th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; }
+                th { background-color: #f3f4f6; color: #4b5563; font-weight: bold; font-size: 12px; }
+                
+                .legend-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                }
+                .legend-item {
+                    border: 1px solid #e5e7eb;
+                    padding: 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                }
+                
+                .summary-box {
+                    background-color: #f8fafc;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-top: 20px;
+                }
+                .summary-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    font-size: 14px;
+                }
+                .summary-row.total {
+                    font-weight: bold;
+                    font-size: 16px;
+                    margin-top: 10px;
+                    padding-top: 10px;
+                    border-top: 1px solid #cbd5e1;
+                }
+                
+                svg, img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                    overflow: visible !important; 
+                }
+
+                .no-print {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 10px;
+                    padding: 10px;
+                    background: #eee;
+                }
+                button {
+                    padding: 8px 16px;
+                    cursor: pointer;
+                    background: #2563eb;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                button.close { background: #4b5563; }
+                
+                @media print {
+                    .no-print { display: none; }
+                    .page-break { page-break-inside: avoid; }
+                    body { padding: 0; }
+                }
+            </style>
+            
+            <div class="no-print">
+                <button class="close" onclick="window.close()">Zavrieť</button>
+                <button onclick="window.print()">Tlačiť</button>
+            </div>
+            
+            <div class="print-container">
+                <div class="header">
+                    <h1>Prehľad rozpočtu</h1>
+                    <p>Cyklus od ${cycleStartDateString} do ${cycleEndDateString}</p>
+                </div>
+                
+                <!-- HORNÝ RIADOK: Graf a Legenda -->
+                <div class="grid-row page-break">
+                    <div class="col-half" style="display: flex; justify-content: center; align-items: center;">
+                        ${pieChartSVG ? pieChartSVG : '<p>Graf nie je dostupný</p>'}
+                    </div>
+                    
+                    <div class="col-half">
+                        <h2>Legenda výdavkov</h2>
+                        <div class="legend-grid">
+                            ${legendHTML}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- DOLNÝ RIADOK: Tabuľka a Rozpočet/Súhrn -->
+                <div class="grid-row">
+                    <!-- Ľavý stĺpec: Tabuľka (širší) -->
+                    <div class="col-wide">
+                         <h2>Detailný zoznam výdavkov</h2>
+                         <table>
+                            <thead>
+                                <tr>
+                                    <th>Dátum a položka</th>
+                                    <th style="text-align: right;">Suma</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pravý stĺpec: Rozpočet a Súhrn (užší) -->
+                    <div class="col-narrow">
+                        ${budgetChartImage ? `
+                        <div class="page-break" style="margin-bottom: 20px;">
+                            <h2>Čerpanie rozpočtov</h2>
+                            <img src="${budgetChartImage}" style="width: 100%; height: auto; border: 1px solid #eee;">
+                        </div>
+                        ` : ''}
+
+                        <div class="summary-box page-break">
+                            <h2>Finančný súhrn</h2>
+                            <div class="summary-row">
+                                <span>Celkový príjem:</span>
+                                <span style="font-weight: bold; color: #16a34a;">${dataToPrint.monthlyIncome.toFixed(2)} €</span>
+                            </div>
+                            <div class="summary-row">
+                                <span>Celkové výdavky:</span>
+                                <span style="font-weight: bold; color: #dc2626;">-${totalSpent.toFixed(2)} €</span>
+                            </div>
+                            <div class="summary-row total">
+                                <span>Zostatok:</span>
+                                <span style="color: ${remainingColor};">${remaining.toFixed(2)} €</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const printWindow = window.open('', '_blank', 'height=800,width=1000');
+        if (!printWindow) {
+            showMessage('Nepodarilo sa otvoriť okno pre tlač. Skontrolujte nastavenia blokovania vyskakovacích okien.', 'error');
+            return;
+        }
+        
+        printWindow.document.write('<!DOCTYPE html><html><head><title>Tlač prehľadu</title></head><body>');
+        printWindow.document.write(printContent);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+    } catch (e) {
+        console.error("Chyba v handlePrintChartAndTable:", e);
+        showMessage("Nastala chyba pri príprave tlače. Skúste to znova.", "error");
+    }
+}
+
+
+function updateCycleDatesDisplay(start = cycleStartDate, end = null) {
+const cycleDatesEl = document.getElementById('cycle-dates');
+const startStr = start ? start.toLocaleDateString('sk-SK') : 'N/A';
+const endStr = end ? end.toLocaleDateString('sk-SK') : 'N/A';
+
+if (startStr && endStr) {
+cycleDatesEl.textContent = `Cyklus od ${startStr} do ${endStr}.`;
+} else if (startStr) {
+cycleDatesEl.textContent = `Sledovanie rozpočtu od ${startStr}. Koniec cyklu zatiaľ nie je určený.`;
+} else {
+cycleDatesEl.textContent = `Začnite pridávaním výdavkov alebo príjmov, aby sa spustil cyklus.`;
+}
+}
+
+function renderUI() {
+    const allCategories = getAllCategories();
+    const categorySelect = document.getElementById('expense-category');
+    const budgetCategorySelect = document.getElementById('budget-category-select');
+    const customInputGroup = document.getElementById('custom-category-input-group');
+    
+    if (!categorySelect || !budgetCategorySelect) return;
+
+    const currentExpenseSelection = categorySelect.value;
+    categorySelect.innerHTML = '';
+    
+    allCategories.forEach(category => {
+        categorySelect.innerHTML += `<option value="${category}">${category}</option>`;
+    });
+
+    categorySelect.innerHTML += `<option value="${CUSTOM_CATEGORY_OPTION}" class="font-bold border-t">-- Vlastná položka --</option>`;
+
+    if (currentExpenseSelection && allCategories.includes(currentExpenseSelection)) {
+        categorySelect.value = currentExpenseSelection;
+    } else if (currentExpenseSelection === CUSTOM_CATEGORY_OPTION) {
+         categorySelect.value = CUSTOM_CATEGORY_OPTION;
+    } else if (allCategories.length > 0) {
+        categorySelect.value = allCategories[0];
+    }
+    
+    if (customInputGroup) {
+        if (categorySelect.value === CUSTOM_CATEGORY_OPTION) {
+            customInputGroup.classList.remove('hidden');
+        } else {
+            customInputGroup.classList.add('hidden');
+        }
+    }
+
+
+    const currentBudgetSelection = budgetCategorySelect.value;
+    budgetCategorySelect.innerHTML = '';
+
+    // 🔥 PRIDANIE MOŽNOSTI "VYBERTE POLOŽKU" ABY NESVIETIL ALKOHOL
+    budgetCategorySelect.innerHTML += `<option value="" disabled selected>-- Vyberte položku --</option>`;
+
+    allCategories.forEach(category => {
+        budgetCategorySelect.innerHTML += `<option value="${category}">${category}</option>`;
+    });
+    
+    // Logic to select previous item if applicable (removed here to force manual selection or reset)
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        loadDataFromLocalStorage();
+        renderAllUI();
+    } catch (e) {
+        console.error("Critical initialization error:", e);
+    }
+
+    const expenseCategory = document.getElementById('expense-category');
+    if(expenseCategory) {
+        expenseCategory.addEventListener('change', (e) => {
+            const customInputGroup = document.getElementById('custom-category-input-group');
+            if (e.target.value === CUSTOM_CATEGORY_OPTION) {
+                customInputGroup.classList.remove('hidden');
+            } else {
+                customInputGroup.classList.add('hidden');
+            }
+        });
+    }
+
+    const budgetCategory = document.getElementById('budget-category-select');
+    if(budgetCategory) {
+        budgetCategory.addEventListener('change', (e) => {
+            const selectedCategory = e.target.value;
+            document.getElementById('budget-amount-input').value = monthlyBudget[selectedCategory] || '';
+            updateBudgetRuleChart();
+        });
+    }
+
+    const addBtn = document.getElementById('add-expense-btn');
+    if(addBtn) addBtn.addEventListener('click', handleAddExpense);
+
+    const saveIncomeBtn = document.getElementById('save-income-btn');
+    if(saveIncomeBtn) saveIncomeBtn.addEventListener('click', handleSaveIncome);
+
+    const saveBudgetBtn = document.getElementById('save-budget-btn');
+    if(saveBudgetBtn) saveBudgetBtn.addEventListener('click', handleSaveBudget);
+
+    const deleteCycleBtn = document.getElementById('delete-current-cycle-btn');
+    if(deleteCycleBtn) deleteCycleBtn.addEventListener('click', handleDeleteCurrentCycle);
+
+    const printBtn = document.getElementById('print-all-btn');
+    if(printBtn) printBtn.addEventListener('click', handlePrintChartAndTable);
+
+    const startCycleBtn = document.getElementById('start-new-cycle-btn');
+    if(startCycleBtn) startCycleBtn.addEventListener('click', startNewCycle);
+
+    const historySidebar = document.getElementById('history-sidebar');
+    const viewHistoryBtn = document.getElementById('view-history-btn');
+    if(viewHistoryBtn) {
+        viewHistoryBtn.addEventListener('click', () => {
+            renderHistorySidebar();
+            if(historySidebar) historySidebar.classList.remove('translate-x-full');
+        });
+    }
+    
+    const closeHistoryBtn = document.getElementById('close-history-btn');
+    if(closeHistoryBtn) {
+        closeHistoryBtn.addEventListener('click', () => {
+             if(historySidebar) historySidebar.classList.add('translate-x-full');
+        });
+    }
+    
+    const backToCurrentBtn = document.getElementById('back-to-current-btn');
+    if(backToCurrentBtn) backToCurrentBtn.addEventListener('click', backToCurrentCycle);
+    
+    const deleteHistoryBtn = document.getElementById('delete-history-btn');
+    if(deleteHistoryBtn) deleteHistoryBtn.addEventListener('click', handleDeleteHistory);
+    
+    window.addEventListener('resize', () => {
+        updateChart();
+    });
+});
+
+window.addEventListener("beforeprint", () => {
+    const chartSection = document.getElementById("pie-chart-section");
+    if(chartSection) {
+        chartSection.classList.remove("hidden");
+    }
+    if (pieChart) {
+        try {
+           pieChart.reflow();
+        } catch(e) {}
+    }
+});
+window.addEventListener("afterprint", () => {
+    if (pieChart) {
+        try {
+           pieChart.reflow();
+        } catch(e) {}
+    }
+});
+</script>
+</body>
+</html>
 
